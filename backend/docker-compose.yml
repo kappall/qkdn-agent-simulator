@@ -1,0 +1,10 @@
+services:
+  backend:
+    build: .
+    container_name: qkdn-backend
+    ports:
+      - "8027:8027"
+      - "8028:8028"
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
