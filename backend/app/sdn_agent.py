@@ -1,0 +1,87 @@
+from copy import deepcopy
+import asyncio
+
+import aiohttp
+
+from app.config import KMS_URL
+from app.logger import setup_logging
+
+
+logger = setup_logging(__name__)
+
+
+class SDNAgent:
+  def __init__(self):
+    self._kms_base_url = KMS_URL
+    self._kms_client = None
+    self._poll_task = None
+    self._local_state = {
+      "nodes": [],
+      "active_links": {},
+      "link_history": [],
+    }
+    self._health_status = {
+      "status": "idle",
+      "timestamp": None,
+    }
+
+  async def start(self):
+    if self._kms_client is None or self._kms_client.closed:
+      self._kms_client = aiohttp.ClientSession(base_url=self._kms_base_url)
+    if self._poll_task is None or self._poll_task.done():
+      self._poll_task = asyncio.create_task(self._poll_kms())
+
+  async def close(self):
+    if self._poll_task is not None and not self._poll_task.done():
+      self._poll_task.cancel()
+      try:
+        await self._poll_task
+      except asyncio.CancelledError:
+        pass
+    if self._kms_client is not None and not self._kms_client.closed:
+      await self._kms_client.close()
+
+  async def fetch_kms_status(self):
+    if self._kms_client is None:
+      raise RuntimeError("SDNAgent must be started before fetching KMS status")
+
+    async with self._kms_client.get("/api/status") as response:
+      response.raise_for_status()
+      return await response.json()
+  
+  async def _poll_kms(self):
+    while True:
+      try:
+        kms_status = await self.fetch_kms_status()
+        self.set_local_state({
+          "nodes": [{
+            "node_id": "node-1",
+            "eskr_available": kms_status.get("eskr_available", 0),
+            "active_links": kms_status.get("active_links", 0),
+          }],
+          "active_links": self._local_state["active_links"],
+          "link_history": self._local_state["link_history"],
+        })
+        self.set_health_status({
+          "status": "healthy",
+          "timestamp": kms_status.get("timestamp"),
+        })
+      except (aiohttp.ClientError, asyncio.TimeoutError, RuntimeError) as exc:
+        logger.warning("KMS poll failed: %s", exc)
+        self.set_health_status({
+          "status": "degraded",
+          "timestamp": None,
+        })
+      await asyncio.sleep(2)
+
+  def get_local_state(self):
+    return deepcopy(self._local_state)
+
+  def set_local_state(self, state):
+    self._local_state = deepcopy(state)
+
+  def get_health_status(self):
+    return deepcopy(self._health_status)
+
+  def set_health_status(self, health_status):
+    self._health_status = deepcopy(health_status)
