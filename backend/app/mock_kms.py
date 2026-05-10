@@ -45,7 +45,12 @@ class MockKMS:
 
   async def provision_link(self, configuration):
     link_id = configuration.get("link_id") or str(uuid.uuid4())
-    key_rate_required = int(configuration.get("key_rate_required", 0))
+
+    raw_key_rate = configuration.get("key_rate_required", 0)
+    if isinstance(raw_key_rate, bool) or not isinstance(raw_key_rate, (int, float)):
+      raise ValueError("key_rate_required must be a number greater than 0")
+
+    key_rate_required = int(raw_key_rate)
 
     if key_rate_required <= 0:
       raise ValueError("key_rate_required must be greater than 0")

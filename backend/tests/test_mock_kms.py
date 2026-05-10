@@ -165,6 +165,17 @@ class TestMockKMSLinkProvisioning:
       })
 
   @pytest.mark.asyncio
+  async def test_link_config_raises_on_boolean_key_rate(self, kms_no_start):
+    """Test: Link config rejects boolean values for key_rate_required."""
+    with pytest.raises(ValueError, match="key_rate_required must be a number greater than 0"):
+      await kms_no_start.provision_link({
+        "link_id": "link-test-3b",
+        "target_node": "node-2",
+        "sla_level": "high",
+        "key_rate_required": True,
+      })
+
+  @pytest.mark.asyncio
   async def test_link_config_tracks_active_links(self, kms):
     """Test: Provisioned links are tracked in active_links."""
     while (await kms.get_eskr()) < 50:
