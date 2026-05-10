@@ -48,6 +48,53 @@ class SDNAgent:
     async with self._kms_client.get("/api/status") as response:
       response.raise_for_status()
       return await response.json()
+
+  async def provision_link(self, kms_command: dict):
+    """
+    Provision a link via KMS.
+    
+    Args:
+      kms_command: Dict with link_id, target_node, sla_level, key_rate_required
+    
+    Returns:
+      Dict with KMS response (status, link_id, eskr_consumed, etc.)
+    
+    Raises:
+      aiohttp.ClientError if KMS is unreachable
+    """
+    if self._kms_client is None:
+      raise RuntimeError("SDNAgent must be started before provisioning")
+
+    async with self._kms_client.post("/api/link_config", json=kms_command) as response:
+      result = await response.json()
+      
+      # Track successful link in active_links and history
+      if result.get("status") == "success":
+        link_id = result.get("link_id")
+        self._local_state["active_links"][link_id] = {
+          "target_node": kms_command.get("target_node"),
+          "qos_level": kms_command.get("sla_level"),
+          "established_at": result.get("timestamp", ""),
+          "eskr_consumed": result.get("eskr_consumed", 0),
+        }
+        self._local_state["link_history"].append({
+          "link_id": link_id,
+          "status": "success",
+          "target_node": kms_command.get("target_node"),
+          "timestamp": result.get("timestamp", ""),
+        })
+      else:
+        # Track failed link in history
+        link_id = kms_command.get("link_id", "unknown")
+        self._local_state["link_history"].append({
+          "link_id": link_id,
+          "status": "failed",
+          "target_node": kms_command.get("target_node"),
+          "reason": result.get("error") or result.get("reason"),
+          "timestamp": result.get("timestamp", ""),
+        })
+      
+      return result
   
   async def _poll_kms(self):
     while True:
