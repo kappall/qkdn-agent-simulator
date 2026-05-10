@@ -47,7 +47,7 @@ async def test_health_endpoint(aiohttp_client):
   kms._eskr_pool = 2
   kms._active_links = {}
 
-  resp = await client.get('/api/health')
+  resp = await client.get('/health')
   assert resp.status == 200
   data = await resp.json()
   assert data['status'] == 'healthy'

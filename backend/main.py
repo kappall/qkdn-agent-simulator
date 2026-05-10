@@ -15,16 +15,16 @@ async def run_all_services():
 
   kms_runner = web.AppRunner(kms_app)
   await kms_runner.setup()
-  kms_site = web.TCPSite(kms_runner, '127.0.0.1', KMS_PORT)
+  kms_site = web.TCPSite(kms_runner, '0.0.0.0', KMS_PORT)
   await kms_site.start()
-  logger.info(f"Mock KMS started on 127.0.0.1:{KMS_PORT}")
+  logger.info(f"Mock KMS started on 0.0.0.0:{KMS_PORT}")
 
   agent_app = create_app()
   agent_runner = web.AppRunner(agent_app)
   await agent_runner.setup()
-  agent_site = web.TCPSite(agent_runner, '127.0.0.1', AGENT_PORT)
+  agent_site = web.TCPSite(agent_runner, '0.0.0.0', AGENT_PORT)
   await agent_site.start()
-  logger.info(f"SDN Agent started on 127.0.0.1:{AGENT_PORT}")
+  logger.info(f"SDN Agent started on 0.0.0.0:{AGENT_PORT}")
 
   stop_event = asyncio.Event()
 

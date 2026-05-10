@@ -1,9 +1,10 @@
 import logging
 
 # Service ports and urls
-KMS_PORT: int = 8000
-KMS_URL: str = "http://127.0.0.1:8000"
-AGENT_PORT: int = 8001
+KMS_PORT: int = 8027
+KMS_URL: str = "http://127.0.0.1:8027"
+AGENT_PORT: int = 8028
+AGENT_URL: str = "http://127.0.0.1:8028"
 
 # Core resilience settings
 CIRCUIT_BREAKER_THRESHOLD: int = 3

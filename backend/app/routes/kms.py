@@ -62,7 +62,7 @@ async def link_config(request: web.Request):
   return web.json_response(status=status.OK, data=response)
 
 
-@routes.get('/api/health')
+@routes.get('/health')
 async def health_check(request: web.Request):
   response = await kms.get_health()
   return web.json_response(status=status.OK, data=response)
