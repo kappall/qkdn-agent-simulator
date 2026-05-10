@@ -11,8 +11,14 @@ from app.config import (
   BACKOFF_MULTIPLIER,
   BACKOFF_MAX_DELAY,
   BACKOFF_MAX_ATTEMPTS,
+  TOKEN_BUCKET_CAPACITY,
+  TOKEN_BUCKET_REFILL_RATE,
+  PROVISION_LINK_RATE_LIMIT,
+  POLL_LINK_STATUS_RATE_LIMIT,
+  KMS_STATUS_RATE_LIMIT,
   KMS_URL,
 )
+from app.rate_limiter import TokenBucketRateLimiter
 from app.retry_handler import ExponentialBackoffRetry
 from app.logger import setup_logging
 
@@ -34,6 +40,18 @@ class SDNAgent:
       multiplier=BACKOFF_MULTIPLIER,
       max_delay=BACKOFF_MAX_DELAY,
       max_attempts=BACKOFF_MAX_ATTEMPTS,
+    )
+    self._provision_link_limiter = TokenBucketRateLimiter(
+      max_tokens=PROVISION_LINK_RATE_LIMIT,
+      refill_rate=PROVISION_LINK_RATE_LIMIT,
+    )
+    self._poll_status_limiter = TokenBucketRateLimiter(
+      max_tokens=POLL_LINK_STATUS_RATE_LIMIT,
+      refill_rate=POLL_LINK_STATUS_RATE_LIMIT,
+    )
+    self._kms_status_limiter = TokenBucketRateLimiter(
+      max_tokens=KMS_STATUS_RATE_LIMIT,
+      refill_rate=KMS_STATUS_RATE_LIMIT,
     )
     self._local_state = {
       "nodes": [],
@@ -68,6 +86,9 @@ class SDNAgent:
     if not self._circuit_breaker.can_execute():
       raise RuntimeError("Circuit breaker is open")
 
+    if not await self._kms_status_limiter.acquire(wait=False):
+      raise RuntimeError("Rate limit exceeded for KMS status check")
+
     try:
       async with self._kms_client.get("/api/status") as response:
         if response.status >= 500:
@@ -94,6 +115,7 @@ class SDNAgent:
       Dict with KMS response (status, link_id, eskr_consumed, etc.)
     
     Raises:
+      RuntimeError if rate limit exceeded or circuit breaker is open
       aiohttp.ClientError if KMS is unreachable
     """
     if self._kms_client is None:
@@ -101,6 +123,10 @@ class SDNAgent:
 
     if not self._circuit_breaker.can_execute():
       raise RuntimeError("Circuit breaker is open")
+
+    # Apply rate limiting
+    if not await self._provision_link_limiter.acquire(wait=False):
+      raise RuntimeError("Rate limit exceeded for provision_link endpoint")
 
     try:
       # Wrap the actual HTTP request with retry logic
@@ -165,6 +191,9 @@ class SDNAgent:
   async def _poll_kms(self):
     while True:
       try:
+        # Apply rate limiting to poll task
+        await self._poll_status_limiter.acquire(wait=True)
+        
         kms_status = await self._retry_handler.execute_with_backoff(
           self.fetch_kms_status
         )

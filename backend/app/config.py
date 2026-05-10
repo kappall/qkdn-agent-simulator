@@ -16,8 +16,15 @@ BACKOFF_MULTIPLIER: float = 2.0
 BACKOFF_MAX_DELAY: float = 60.0
 BACKOFF_MAX_ATTEMPTS: int = 5
 
-TOKEN_BUCKET_CAPACITY: int = 10
-TOKEN_BUCKET_REFILL_RATE: int = 2
+# Token bucket rate limiting settings
+# Global rate limiter for SDN Agent endpoints
+TOKEN_BUCKET_CAPACITY: float = 10.0  # Maximum tokens in bucket
+TOKEN_BUCKET_REFILL_RATE: float = 2.0  # Tokens added per second
+
+# Endpoint-specific rate limits
+PROVISION_LINK_RATE_LIMIT: float = 5.0  # Max requests per second for provision_link
+POLL_LINK_STATUS_RATE_LIMIT: float = 10.0  # Max requests per second for poll_link_status
+KMS_STATUS_RATE_LIMIT: float = 20.0  # Max requests per second for KMS status checks
 
 # Logging defaults
 LOG_LEVEL: int = logging.DEBUG
