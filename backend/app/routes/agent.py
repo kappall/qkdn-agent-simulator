@@ -27,6 +27,13 @@ async def nodes_handler(request):
   return web.json_response({"nodes": agent.get_local_state().get("nodes", [])})
 
 
+@routes.get('/api/ui/circuit_breaker_status')
+async def circuit_breaker_status_handler(request):
+  logger.info("Agent circuit breaker status endpoint pinged")
+  agent = request.app["sdn_agent"]
+  return web.json_response(agent.get_circuit_breaker_status())
+
+
 @routes.post('/api/ui/provision_link')
 async def provision_link_handler(request):
   logger.info("Provision link endpoint called")

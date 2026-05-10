@@ -3,7 +3,8 @@ import asyncio
 
 import aiohttp
 
-from app.config import KMS_URL
+from app.circuit_breaker import CircuitBreaker
+from app.config import CIRCUIT_BREAKER_RESET_TIMEOUT, CIRCUIT_BREAKER_THRESHOLD, KMS_URL
 from app.logger import setup_logging
 
 
@@ -15,6 +16,10 @@ class SDNAgent:
     self._kms_base_url = KMS_URL
     self._kms_client = None
     self._poll_task = None
+    self._circuit_breaker = CircuitBreaker(
+      failure_threshold=CIRCUIT_BREAKER_THRESHOLD,
+      reset_timeout_seconds=CIRCUIT_BREAKER_RESET_TIMEOUT,
+    )
     self._local_state = {
       "nodes": [],
       "active_links": {},
@@ -45,9 +50,23 @@ class SDNAgent:
     if self._kms_client is None:
       raise RuntimeError("SDNAgent must be started before fetching KMS status")
 
-    async with self._kms_client.get("/api/status") as response:
-      response.raise_for_status()
-      return await response.json()
+    if not self._circuit_breaker.can_execute():
+      raise RuntimeError("Circuit breaker is open")
+
+    try:
+      async with self._kms_client.get("/api/status") as response:
+        if response.status >= 500:
+          self._circuit_breaker.record_failure()
+          body = await response.text()
+          raise RuntimeError(f"KMS status request failed: {response.status} {body}")
+
+        response.raise_for_status()
+        result = await response.json()
+        self._circuit_breaker.record_success()
+        return result
+    except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
+      self._circuit_breaker.record_failure()
+      raise exc
 
   async def provision_link(self, kms_command: dict):
     """
@@ -65,36 +84,48 @@ class SDNAgent:
     if self._kms_client is None:
       raise RuntimeError("SDNAgent must be started before provisioning")
 
-    async with self._kms_client.post("/api/link_config", json=kms_command) as response:
-      result = await response.json()
-      
-      # Track successful link in active_links and history
-      if result.get("status") == "success":
-        link_id = result.get("link_id")
-        self._local_state["active_links"][link_id] = {
-          "target_node": kms_command.get("target_node"),
-          "qos_level": kms_command.get("sla_level"),
-          "established_at": result.get("timestamp", ""),
-          "eskr_consumed": result.get("eskr_consumed", 0),
-        }
-        self._local_state["link_history"].append({
-          "link_id": link_id,
-          "status": "success",
-          "target_node": kms_command.get("target_node"),
-          "timestamp": result.get("timestamp", ""),
-        })
-      else:
-        # Track failed link in history
-        link_id = kms_command.get("link_id", "unknown")
-        self._local_state["link_history"].append({
-          "link_id": link_id,
-          "status": "failed",
-          "target_node": kms_command.get("target_node"),
-          "reason": result.get("error") or result.get("reason"),
-          "timestamp": result.get("timestamp", ""),
-        })
-      
-      return result
+    if not self._circuit_breaker.can_execute():
+      raise RuntimeError("Circuit breaker is open")
+
+    try:
+      async with self._kms_client.post("/api/link_config", json=kms_command) as response:
+        if response.status >= 500:
+          self._circuit_breaker.record_failure()
+          body = await response.text()
+          raise RuntimeError(f"KMS provisioning request failed: {response.status} {body}")
+
+        result = await response.json()
+
+        self._circuit_breaker.record_success()
+
+        if result.get("status") == "success":
+          link_id = result.get("link_id")
+          self._local_state["active_links"][link_id] = {
+            "target_node": kms_command.get("target_node"),
+            "qos_level": kms_command.get("sla_level"),
+            "established_at": result.get("timestamp", ""),
+            "eskr_consumed": result.get("eskr_consumed", 0),
+          }
+          self._local_state["link_history"].append({
+            "link_id": link_id,
+            "status": "success",
+            "target_node": kms_command.get("target_node"),
+            "timestamp": result.get("timestamp", ""),
+          })
+        else:
+          link_id = kms_command.get("link_id", "unknown")
+          self._local_state["link_history"].append({
+            "link_id": link_id,
+            "status": "failed",
+            "target_node": kms_command.get("target_node"),
+            "reason": result.get("error") or result.get("reason"),
+            "timestamp": result.get("timestamp", ""),
+          })
+
+        return result
+    except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
+      self._circuit_breaker.record_failure()
+      raise exc
   
   async def _poll_kms(self):
     while True:
@@ -132,3 +163,6 @@ class SDNAgent:
 
   def set_health_status(self, health_status):
     self._health_status = deepcopy(health_status)
+
+  def get_circuit_breaker_status(self):
+    return deepcopy(self._circuit_breaker.get_status())
