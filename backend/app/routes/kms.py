@@ -7,19 +7,19 @@ routes = web.RouteTableDef()
 
 kms = MockKMS()
 
-@routes.get('/status')
+@routes.get('/api/status')
 async def get_status(request: web.Request):
   response = await kms.get_status()
   return web.json_response(status=status.OK, data=response)
 
 
-@routes.get('/capabilities')
+@routes.get('/api/capabilities')
 async def get_capabilities(request: web.Request):
   response = await kms.get_capabilities()
   return web.json_response(status=status.OK, data=response)
 
 
-@routes.post('/link_config')
+@routes.post('/api/link_config')
 async def link_config(request: web.Request):
   payload = await request.json()
 
@@ -62,7 +62,7 @@ async def link_config(request: web.Request):
   return web.json_response(status=status.OK, data=response)
 
 
-@routes.get('/health')
+@routes.get('/api/health')
 async def health_check(request: web.Request):
   response = await kms.get_health()
   return web.json_response(status=status.OK, data=response)
