@@ -26,5 +26,9 @@ PROVISION_LINK_RATE_LIMIT: float = 5.0  # Max requests per second for provision_
 POLL_LINK_STATUS_RATE_LIMIT: float = 10.0  # Max requests per second for poll_link_status
 KMS_STATUS_RATE_LIMIT: float = 20.0  # Max requests per second for KMS status checks
 
+# Chaos Engine settings for fault injection
+CHAOS_ENGINE_ENABLED: bool = True  # Enable/disable chaos engine
+CHAOS_MAX_ACTIVE_FAULTS: int = 10  # Maximum number of concurrent faults
+
 # Logging defaults
 LOG_LEVEL: int = logging.DEBUG

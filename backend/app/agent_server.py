@@ -3,7 +3,8 @@ from aiohttp import web
 from app.config import AGENT_PORT
 from app.logger import setup_logging
 from app.sdn_agent import SDNAgent
-from app.routes.agent import routes
+from app.routes.agent import routes as agent_routes
+from app.routes.chaos import routes as chaos_routes
 
 logger = setup_logging("agent_server")
 
@@ -23,10 +24,12 @@ async def on_cleanup(app):
 def create_app():
   app = web.Application()
   app["sdn_agent"] = SDNAgent()
+  app["chaos_engine"] = app["sdn_agent"].get_chaos_engine()
   app.add_routes([
     web.get('/health', health),
   ])
-  app.add_routes(routes)
+  app.add_routes(agent_routes)
+  app.add_routes(chaos_routes)
   app.on_startup.append(on_startup)
   app.on_cleanup.append(on_cleanup)
   return app

@@ -4,6 +4,7 @@ import asyncio
 import aiohttp
 
 from app.circuit_breaker import CircuitBreaker
+from app.chaos_engine import ChaosEngine, EndpointFilter, ChaosInjectionError
 from app.config import (
   CIRCUIT_BREAKER_RESET_TIMEOUT,
   CIRCUIT_BREAKER_THRESHOLD,
@@ -16,6 +17,7 @@ from app.config import (
   PROVISION_LINK_RATE_LIMIT,
   POLL_LINK_STATUS_RATE_LIMIT,
   KMS_STATUS_RATE_LIMIT,
+  CHAOS_ENGINE_ENABLED,
   KMS_URL,
 )
 from app.rate_limiter import TokenBucketRateLimiter
@@ -53,6 +55,7 @@ class SDNAgent:
       max_tokens=KMS_STATUS_RATE_LIMIT,
       refill_rate=KMS_STATUS_RATE_LIMIT,
     )
+    self._chaos_engine = ChaosEngine(enabled=CHAOS_ENGINE_ENABLED)
     self._local_state = {
       "nodes": [],
       "active_links": {},
@@ -88,6 +91,11 @@ class SDNAgent:
 
     if not await self._kms_status_limiter.acquire(wait=False):
       raise RuntimeError("Rate limit exceeded for KMS status check")
+
+    fault_type = await self._chaos_engine.should_inject_fault(EndpointFilter.FETCH_KMS_STATUS)
+    if fault_type:
+      logger.warning("Chaos fault injected: %s", fault_type.value)
+      raise ChaosInjectionError(fault_type, fault_type.value)
 
     try:
       async with self._kms_client.get("/api/status") as response:
@@ -127,6 +135,11 @@ class SDNAgent:
     # Apply rate limiting
     if not await self._provision_link_limiter.acquire(wait=False):
       raise RuntimeError("Rate limit exceeded for provision_link endpoint")
+
+    fault_type = await self._chaos_engine.should_inject_fault(EndpointFilter.PROVISION_LINK)
+    if fault_type:
+      logger.warning("Chaos fault injected: %s", fault_type.value)
+      raise ChaosInjectionError(fault_type, fault_type.value)
 
     try:
       # Wrap the actual HTTP request with retry logic
@@ -232,3 +245,7 @@ class SDNAgent:
 
   def get_circuit_breaker_status(self):
     return deepcopy(self._circuit_breaker.get_status())
+
+  def get_chaos_engine(self):
+    """Get the chaos engine instance for direct access."""
+    return self._chaos_engine
