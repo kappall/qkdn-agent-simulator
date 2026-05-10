@@ -1,7 +1,7 @@
 import logging
 import json
 
-from config import LOG_LEVEL
+from app.config import LOG_LEVEL
 
 class JsonFormatter(logging.Formatter):
   def format(self, record):

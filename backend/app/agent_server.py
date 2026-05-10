@@ -1,6 +1,6 @@
 from aiohttp import web
-from logger import setup_logging
-from config import AGENT_PORT
+from app.logger import setup_logging
+from app.config import AGENT_PORT
 
 logger = setup_logging("agent_server")
 
