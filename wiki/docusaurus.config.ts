@@ -14,10 +14,13 @@ const config: Config = {
   projectName: 'qkdn-agent-simulator',
 
   onBrokenLinks: 'warn',
-  onBrokenMarkdownLinks: 'warn',
+  trailingSlash: false,
 
   markdown: {
     mermaid: true,
+    hooks: {
+      onBrokenMarkdownLinks: 'warn',
+    },
   },
   themes: ['@docusaurus/theme-mermaid'],
 
