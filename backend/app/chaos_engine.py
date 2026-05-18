@@ -256,8 +256,8 @@ class ChaosEngine:
           logger.debug(
             "Fault triggered: %s (type=%s, endpoint=%s)",
             fault.fault_id,
-            fault.config.fault_type.value,
             endpoint.value,
+            fault.config.fault_type.value,
           )
           
           return fault.config.fault_type
