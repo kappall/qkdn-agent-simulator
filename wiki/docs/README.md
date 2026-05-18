@@ -1,3 +1,8 @@
+---
+sidebar_position: 13
+title: "Getting Started"
+---
+
 # qkdn-agent-simulator — backend
 
 Quick start
